@@ -1,8 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Refueling } from './refueling.entity';
-import { CreateRefuelingDto } from './dto/create-refueling.dto';
+import { supabaseAdmin } from '../config/supabase.config';
+import type { CreateRefuelingDto } from './dto/create-refueling.dto';
 import { VehiclesService } from '../vehicles/vehicles.service';
 
 export enum AnomalyType {
@@ -29,12 +27,10 @@ export class RefuelingsService {
     };
 
     constructor(
-        @InjectRepository(Refueling)
-        private readonly refuelingRepository: Repository<Refueling>,
         private readonly vehiclesService: VehiclesService,
     ) { }
 
-    async create(createRefuelingDto: CreateRefuelingDto): Promise<Refueling> {
+    async create(createRefuelingDto: CreateRefuelingDto): Promise<any> {
         const vehicle = await this.vehiclesService.findOne(createRefuelingDto.vehicleId);
 
         // RF-014: Validação Anti-Fraude
@@ -47,19 +43,25 @@ export class RefuelingsService {
             createRefuelingDto.liters,
         );
 
-        const refueling = this.refuelingRepository.create({
-            ...createRefuelingDto,
-            kmPerLiter,
-            hasAnomaly: validation.anomalies.length > 0,
-            anomalyType: validation.anomalies.length > 0 ? validation.anomalies.join(', ') : null,
-        });
+        const { data: refueling, error } = await supabaseAdmin
+            .from('refuelings')
+            .insert([{
+                ...createRefuelingDto,
+                km_per_liter: kmPerLiter,
+                has_anomaly: validation.anomalies.length > 0,
+                anomaly_type: validation.anomalies.length > 0 ? validation.anomalies.join(', ') : null,
+            }])
+            .select()
+            .single();
 
-        const savedRefueling = await this.refuelingRepository.save(refueling);
+        if (error) {
+            throw new BadRequestException(`Failed to create refueling: ${error.message}`);
+        }
 
         // Atualizar odômetro do veículo
         await this.vehiclesService.updateOdometer(createRefuelingDto.vehicleId, createRefuelingDto.odometer);
 
-        return savedRefueling;
+        return refueling;
     }
 
     async validateRefueling(dto: CreateRefuelingDto, vehicle: any): Promise<ValidationResult> {
@@ -67,10 +69,13 @@ export class RefuelingsService {
         const warnings: string[] = [];
 
         // Buscar último abastecimento deste veículo
-        const lastRefueling = await this.refuelingRepository.findOne({
-            where: { vehicleId: dto.vehicleId },
-            order: { createdAt: 'DESC' },
-        });
+        const { data: lastRefueling } = await supabaseAdmin
+            .from('refuelings')
+            .select('*')
+            .eq('vehicle_id', dto.vehicleId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
         // 1. Odômetro não pode ser menor que o último registro
         if (lastRefueling && dto.odometer < lastRefueling.odometer) {
@@ -79,9 +84,9 @@ export class RefuelingsService {
         }
 
         // 2. Litros não podem exceder capacidade do tanque
-        if (vehicle.tankCapacity && dto.liters > vehicle.tankCapacity) {
+        if (vehicle.tank_capacity && dto.liters > vehicle.tank_capacity) {
             anomalies.push(AnomalyType.EXCEEDS_TANK_CAPACITY);
-            warnings.push(`Liters (${dto.liters}) exceeds tank capacity (${vehicle.tankCapacity})`);
+            warnings.push(`Liters (${dto.liters}) exceeds tank capacity (${vehicle.tank_capacity})`);
         }
 
         // 3. Verificar km/l dentro da faixa esperada (±30%)
@@ -112,10 +117,13 @@ export class RefuelingsService {
     }
 
     private async calculateKmPerLiter(vehicleId: string, currentOdometer: number, liters: number): Promise<number | null> {
-        const lastRefueling = await this.refuelingRepository.findOne({
-            where: { vehicleId },
-            order: { createdAt: 'DESC' },
-        });
+        const { data: lastRefueling } = await supabaseAdmin
+            .from('refuelings')
+            .select('*')
+            .eq('vehicle_id', vehicleId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
         if (!lastRefueling) {
             return null;
@@ -129,76 +137,95 @@ export class RefuelingsService {
         return Number((kmDriven / liters).toFixed(2));
     }
 
-    async findAll(filters?: { vehicleId?: string; driverId?: string; hasAnomaly?: boolean }): Promise<Refueling[]> {
-        const queryBuilder = this.refuelingRepository.createQueryBuilder('refueling')
-            .leftJoinAndSelect('refueling.vehicle', 'vehicle')
-            .leftJoinAndSelect('refueling.driver', 'driver')
-            .orderBy('refueling.createdAt', 'DESC');
+    async findAll(filters?: { vehicleId?: string; driverId?: string; hasAnomaly?: boolean }): Promise<any[]> {
+        let query = supabaseAdmin
+            .from('refuelings')
+            .select('*, vehicle:vehicles(*), driver:drivers(*)')
+            .order('created_at', { ascending: false });
 
         if (filters?.vehicleId) {
-            queryBuilder.andWhere('refueling.vehicleId = :vehicleId', { vehicleId: filters.vehicleId });
+            query = query.eq('vehicle_id', filters.vehicleId);
         }
 
         if (filters?.driverId) {
-            queryBuilder.andWhere('refueling.driverId = :driverId', { driverId: filters.driverId });
+            query = query.eq('driver_id', filters.driverId);
         }
 
         if (filters?.hasAnomaly !== undefined) {
-            queryBuilder.andWhere('refueling.hasAnomaly = :hasAnomaly', { hasAnomaly: filters.hasAnomaly });
+            query = query.eq('has_anomaly', filters.hasAnomaly);
         }
 
-        return queryBuilder.getMany();
+        const { data, error } = await query;
+
+        if (error) {
+            throw new Error(`Failed to fetch refuelings: ${error.message}`);
+        }
+
+        return data || [];
     }
 
-    async findOne(id: string): Promise<Refueling> {
-        const refueling = await this.refuelingRepository.findOne({
-            where: { id },
-            relations: ['vehicle', 'driver', 'trip'],
-        });
+    async findOne(id: string): Promise<any> {
+        const { data: refueling, error } = await supabaseAdmin
+            .from('refuelings')
+            .select('*, vehicle:vehicles(*), driver:drivers(*), trip:trips(*)')
+            .eq('id', id)
+            .single();
 
-        if (!refueling) {
+        if (error || !refueling) {
             throw new NotFoundException(`Refueling with ID ${id} not found`);
         }
 
         return refueling;
     }
 
-    async findAnomalies(): Promise<Refueling[]> {
+    async findAnomalies(): Promise<any[]> {
         return this.findAll({ hasAnomaly: true });
     }
 
-    async validateById(id: string, validatorId: string): Promise<Refueling> {
+    async validateById(id: string, validatorId: string): Promise<any> {
         const refueling = await this.findOne(id);
 
-        refueling.validatedAt = new Date();
-        refueling.validatedBy = validatorId;
-        refueling.hasAnomaly = false; // Gestor validou manualmente
-        refueling.anomalyType = null;
+        const { data: validated, error } = await supabaseAdmin
+            .from('refuelings')
+            .update({
+                validated_at: new Date().toISOString(),
+                validated_by: validatorId,
+                has_anomaly: false, // Gestor validou manualmente
+                anomaly_type: null,
+            })
+            .eq('id', id)
+            .select()
+            .single();
 
-        return this.refuelingRepository.save(refueling);
+        if (error) {
+            throw new BadRequestException(`Failed to validate refueling: ${error.message}`);
+        }
+
+        return validated;
     }
 
     async getVehicleConsumptionStats(vehicleId: string): Promise<any> {
-        const refuelings = await this.refuelingRepository.find({
-            where: { vehicleId },
-            order: { createdAt: 'DESC' },
-            take: 10,
-        });
+        const { data: refuelings, error } = await supabaseAdmin
+            .from('refuelings')
+            .select('*')
+            .eq('vehicle_id', vehicleId)
+            .order('created_at', { ascending: false })
+            .limit(10);
 
-        if (refuelings.length === 0) {
+        if (error || !refuelings || refuelings.length === 0) {
             return { averageKmPerLiter: null, totalLiters: 0, totalCost: 0 };
         }
 
         const validKmPerLiter = refuelings
-            .filter(r => r.kmPerLiter !== null)
-            .map(r => Number(r.kmPerLiter));
+            .filter(r => r.km_per_liter !== null)
+            .map(r => Number(r.km_per_liter));
 
         const averageKmPerLiter = validKmPerLiter.length > 0
             ? validKmPerLiter.reduce((a, b) => a + b, 0) / validKmPerLiter.length
             : null;
 
         const totalLiters = refuelings.reduce((sum, r) => sum + Number(r.liters), 0);
-        const totalCost = refuelings.reduce((sum, r) => sum + Number(r.totalCost), 0);
+        const totalCost = refuelings.reduce((sum, r) => sum + Number(r.total_cost), 0);
 
         return {
             averageKmPerLiter: averageKmPerLiter?.toFixed(2),

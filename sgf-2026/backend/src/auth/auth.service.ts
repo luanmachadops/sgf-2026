@@ -1,16 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
-import { Driver, DriverStatus } from '../drivers/driver.entity';
-import { User, UserRole } from '../users/user.entity';
+import { supabaseAdmin } from '../config/supabase.config';
 import { LoginDriverDto, LoginUserDto, AuthResponseDto } from './dto/auth.dto';
 
 export interface JwtPayload {
     sub: string;
     type: 'driver' | 'user';
-    role?: UserRole;
+    role?: string;
     cpf?: string;
     email?: string;
 }
@@ -20,53 +15,55 @@ export class AuthService {
     private readonly MAX_LOGIN_ATTEMPTS = 3;
     private loginAttempts: Map<string, { count: number; lockedUntil?: Date }> = new Map();
 
-    constructor(
-        @InjectRepository(Driver)
-        private readonly driverRepository: Repository<Driver>,
-        @InjectRepository(User)
-        private readonly userRepository: Repository<User>,
-        private readonly jwtService: JwtService,
-    ) { }
-
     // RF-001: Login do Motorista (CPF + Senha)
     async loginDriver(loginDto: LoginDriverDto): Promise<AuthResponseDto> {
         const lockKey = `driver:${loginDto.cpf}`;
         this.checkLockout(lockKey);
 
-        const driver = await this.driverRepository.findOne({
-            where: { cpf: loginDto.cpf },
-        });
+        try {
+            // Buscar driver pelo CPF
+            const { data: driver, error: driverError } = await supabaseAdmin
+                .from('drivers')
+                .select('*')
+                .eq('cpf', loginDto.cpf)
+                .single();
 
-        if (!driver) {
-            this.recordFailedAttempt(lockKey);
-            throw new UnauthorizedException('Invalid credentials');
+            if (driverError || !driver) {
+                this.recordFailedAttempt(lockKey);
+                throw new UnauthorizedException('Invalid credentials');
+            }
+
+            if (driver.status !== 'ACTIVE') {
+                throw new UnauthorizedException('Driver account is not active');
+            }
+
+            // Fazer login com Supabase Auth usando email (construído a partir do CPF)
+            const email = `driver-${loginDto.cpf}@internal.sgf2026.local`;
+            const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+                email,
+                password: loginDto.password,
+            });
+
+            if (authError) {
+                this.recordFailedAttempt(lockKey);
+                throw new UnauthorizedException('Invalid credentials');
+            }
+
+            // Limpar tentativas após login bem-sucedido
+            this.loginAttempts.delete(lockKey);
+
+            return {
+                accessToken: authData.session!.access_token,
+                userType: 'driver',
+                userId: driver.id,
+                name: driver.name,
+            };
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new UnauthorizedException('Login failed');
         }
-
-        if (driver.status !== DriverStatus.ACTIVE) {
-            throw new UnauthorizedException('Driver account is not active');
-        }
-
-        const isPasswordValid = await bcrypt.compare(loginDto.password, driver.passwordHash);
-        if (!isPasswordValid) {
-            this.recordFailedAttempt(lockKey);
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        // Limpar tentativas após login bem-sucedido
-        this.loginAttempts.delete(lockKey);
-
-        const payload: JwtPayload = {
-            sub: driver.id,
-            type: 'driver',
-            cpf: driver.cpf,
-        };
-
-        return {
-            accessToken: this.jwtService.sign(payload),
-            userType: 'driver',
-            userId: driver.id,
-            name: driver.name,
-        };
     }
 
     // RF-002: Login do Gestor (Email + Senha)
@@ -74,42 +71,85 @@ export class AuthService {
         const lockKey = `user:${loginDto.email}`;
         this.checkLockout(lockKey);
 
-        const user = await this.userRepository.findOne({
-            where: { email: loginDto.email },
-        });
+        try {
+            // Buscar usuário pelo email
+            const { data: user, error: userError } = await supabaseAdmin
+                .from('users')
+                .select('*')
+                .eq('email', loginDto.email)
+                .single();
 
-        if (!user) {
-            this.recordFailedAttempt(lockKey);
-            throw new UnauthorizedException('Invalid credentials');
+            if (userError || !user) {
+                this.recordFailedAttempt(lockKey);
+                throw new UnauthorizedException('Invalid credentials');
+            }
+
+            // Fazer login com Supabase Auth
+            const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+                email: loginDto.email,
+                password: loginDto.password,
+            });
+
+            if (authError) {
+                this.recordFailedAttempt(lockKey);
+                throw new UnauthorizedException('Invalid credentials');
+            }
+
+            this.loginAttempts.delete(lockKey);
+
+            return {
+                accessToken: authData.session!.access_token,
+                userType: 'user',
+                userId: user.id,
+                name: user.name,
+                role: user.role,
+            };
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new UnauthorizedException('Login failed');
         }
-
-        const isPasswordValid = await bcrypt.compare(loginDto.password, user.passwordHash);
-        if (!isPasswordValid) {
-            this.recordFailedAttempt(lockKey);
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        this.loginAttempts.delete(lockKey);
-
-        const payload: JwtPayload = {
-            sub: user.id,
-            type: 'user',
-            role: user.role,
-            email: user.email,
-        };
-
-        return {
-            accessToken: this.jwtService.sign(payload),
-            userType: 'user',
-            userId: user.id,
-            name: user.name,
-            role: user.role,
-        };
     }
 
     async validateToken(token: string): Promise<JwtPayload> {
         try {
-            return this.jwtService.verify(token);
+            const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+            if (error || !user) {
+                throw new UnauthorizedException('Invalid token');
+            }
+
+            // Determinar tipo de usuário baseado no email
+            const isDriver = user.email?.startsWith('driver-');
+
+            if (isDriver) {
+                const cpf = user.email!.replace('driver-', '').split('@')[0];
+                const { data: driver } = await supabaseAdmin
+                    .from('drivers')
+                    .select('id, cpf')
+                    .eq('cpf', cpf)
+                    .single();
+
+                return {
+                    sub: driver?.id || user.id,
+                    type: 'driver',
+                    cpf,
+                };
+            } else {
+                const { data: userData } = await supabaseAdmin
+                    .from('users')
+                    .select('id, email, role')
+                    .eq('email', user.email)
+                    .single();
+
+                return {
+                    sub: userData?.id || user.id,
+                    type: 'user',
+                    role: userData?.role,
+                    email: user.email!,
+                };
+            }
         } catch {
             throw new UnauthorizedException('Invalid token');
         }
@@ -117,20 +157,30 @@ export class AuthService {
 
     async getProfile(userId: string, userType: 'driver' | 'user'): Promise<any> {
         if (userType === 'driver') {
-            const driver = await this.driverRepository.findOne({
-                where: { id: userId },
-                relations: ['department'],
-            });
-            if (!driver) throw new UnauthorizedException('Driver not found');
-            const { passwordHash, ...profile } = driver;
+            const { data: driver, error } = await supabaseAdmin
+                .from('drivers')
+                .select('*, department:departments(*)')
+                .eq('id', userId)
+                .single();
+
+            if (error || !driver) {
+                throw new UnauthorizedException('Driver not found');
+            }
+
+            const { password_hash, ...profile } = driver;
             return profile;
         } else {
-            const user = await this.userRepository.findOne({
-                where: { id: userId },
-                relations: ['department'],
-            });
-            if (!user) throw new UnauthorizedException('User not found');
-            const { passwordHash, ...profile } = user;
+            const { data: user, error } = await supabaseAdmin
+                .from('users')
+                .select('*, department:departments(*)')
+                .eq('id', userId)
+                .single();
+
+            if (error || !user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            const { password_hash, ...profile } = user;
             return profile;
         }
     }

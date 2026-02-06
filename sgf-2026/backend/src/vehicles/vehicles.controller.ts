@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Put,
+    Patch,
     Delete,
     Body,
     Param,
@@ -93,6 +94,16 @@ export class VehiclesController {
         @Body('odometer') odometer: number,
     ): Promise<Vehicle> {
         return this.vehiclesService.updateOdometer(id, odometer);
+    }
+
+    @Patch(':id/photo')
+    @ApiOperation({ summary: 'Atualizar foto do veículo' })
+    @ApiResponse({ status: 200, description: 'Foto atualizada com sucesso' })
+    async updatePhoto(
+        @Param('id') id: string,
+        @Body('photoUrl') photoUrl: string,
+    ): Promise<Vehicle> {
+        return this.vehiclesService.updatePhoto(id, photoUrl);
     }
 
     @Delete(':id')

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "./styles/theme.css";
+
+@source "../index.html";
+@source "./src/**/*.{js,ts,jsx,tsx}";
+/* Leaflet map container */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}

@@ -1,107 +1,188 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Vehicle, VehicleStatus } from './vehicle.entity';
-import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { supabaseAdmin } from '../config/supabase.config';
+import type { CreateVehicleDto } from './dto/create-vehicle.dto';
+import type { UpdateVehicleDto } from './dto/update-vehicle.dto';
+
+type VehicleStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
 
 @Injectable()
 export class VehiclesService {
-    constructor(
-        @InjectRepository(Vehicle)
-        private vehiclesRepository: Repository<Vehicle>,
-    ) { }
-
     async findAll(filters?: {
         status?: VehicleStatus;
         departmentId?: string;
-    }): Promise<Vehicle[]> {
-        const query = this.vehiclesRepository.createQueryBuilder('vehicle');
+    }): Promise<any[]> {
+        let query = supabaseAdmin
+            .from('vehicles')
+            .select('*, department:departments(*)');
 
         if (filters?.status) {
-            query.andWhere('vehicle.status = :status', { status: filters.status });
+            query = query.eq('status', filters.status);
         }
 
         if (filters?.departmentId) {
-            query.andWhere('vehicle.departmentId = :departmentId', {
-                departmentId: filters.departmentId,
-            });
+            query = query.eq('department_id', filters.departmentId);
         }
 
-        query.leftJoinAndSelect('vehicle.department', 'department');
+        const { data, error } = await query;
 
-        return query.getMany();
+        if (error) {
+            throw new Error(`Failed to fetch vehicles: ${error.message}`);
+        }
+
+        return data || [];
     }
 
-    async findOne(id: string): Promise<Vehicle> {
-        const vehicle = await this.vehiclesRepository.findOne({
-            where: { id },
-            relations: ['department', 'trips', 'refuelings', 'maintenances'],
-        });
+    async findOne(id: string): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .select(`
+                *,
+                department:departments(*),
+                trips:trips(*),
+                refuelings:refuelings(*),
+                maintenances:maintenances(*)
+            `)
+            .eq('id', id)
+            .single();
 
-        if (!vehicle) {
+        if (error || !vehicle) {
             throw new NotFoundException(`Vehicle with ID ${id} not found`);
         }
 
         return vehicle;
     }
 
-    async findByPlate(plate: string): Promise<Vehicle> {
-        const vehicle = await this.vehiclesRepository.findOne({
-            where: { plate },
-            relations: ['department'],
-        });
+    async findByPlate(plate: string): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .select('*, department:departments(*)')
+            .eq('plate', plate)
+            .single();
 
-        if (!vehicle) {
+        if (error || !vehicle) {
             throw new NotFoundException(`Vehicle with plate ${plate} not found`);
         }
 
         return vehicle;
     }
 
-    async findByQrCode(qrCodeHash: string): Promise<Vehicle> {
-        const vehicle = await this.vehiclesRepository.findOne({
-            where: { qrCodeHash },
-            relations: ['department'],
-        });
+    async findByQrCode(qrCodeHash: string): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .select('*, department:departments(*)')
+            .eq('qr_code_hash', qrCodeHash)
+            .single();
 
-        if (!vehicle) {
+        if (error || !vehicle) {
             throw new NotFoundException(`Vehicle with QR code not found`);
         }
 
         return vehicle;
     }
 
-    async create(createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
-        const vehicle = this.vehiclesRepository.create(createVehicleDto);
-        return this.vehiclesRepository.save(vehicle);
+    async create(createVehicleDto: CreateVehicleDto): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .insert([createVehicleDto])
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to create vehicle: ${error.message}`);
+        }
+
+        return vehicle;
     }
 
-    async update(id: string, updateVehicleDto: UpdateVehicleDto): Promise<Vehicle> {
-        const vehicle = await this.findOne(id);
-        Object.assign(vehicle, updateVehicleDto);
-        return this.vehiclesRepository.save(vehicle);
+    async update(id: string, updateVehicleDto: UpdateVehicleDto): Promise<any> {
+        // Verify vehicle exists first
+        await this.findOne(id);
+
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .update(updateVehicleDto)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to update vehicle: ${error.message}`);
+        }
+
+        return vehicle;
     }
 
     async remove(id: string): Promise<void> {
-        const vehicle = await this.findOne(id);
-        await this.vehiclesRepository.remove(vehicle);
+        // Verify vehicle exists first
+        await this.findOne(id);
+
+        const { error } = await supabaseAdmin
+            .from('vehicles')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            throw new BadRequestException(`Failed to delete vehicle: ${error.message}`);
+        }
     }
 
-    async updateStatus(id: string, status: VehicleStatus): Promise<Vehicle> {
-        const vehicle = await this.findOne(id);
-        vehicle.status = status;
-        return this.vehiclesRepository.save(vehicle);
-    }
+    async updateStatus(id: string, status: VehicleStatus): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .update({ status })
+            .eq('id', id)
+            .select()
+            .single();
 
-    async updateOdometer(id: string, odometer: number): Promise<Vehicle> {
-        const vehicle = await this.findOne(id);
-
-        if (odometer < vehicle.currentOdometer) {
-            throw new Error('Odometer cannot go backwards');
+        if (error || !vehicle) {
+            throw new NotFoundException(`Failed to update vehicle status: ${error?.message || 'Vehicle not found'}`);
         }
 
-        vehicle.currentOdometer = odometer;
-        return this.vehiclesRepository.save(vehicle);
+        return vehicle;
+    }
+
+    async updateOdometer(id: string, odometer: number): Promise<any> {
+        // Get current odometer first
+        const { data: currentVehicle } = await supabaseAdmin
+            .from('vehicles')
+            .select('current_odometer')
+            .eq('id', id)
+            .single();
+
+        if (!currentVehicle) {
+            throw new NotFoundException(`Vehicle with ID ${id} not found`);
+        }
+
+        if (odometer < currentVehicle.current_odometer) {
+            throw new BadRequestException('Odometer cannot go backwards');
+        }
+
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .update({ current_odometer: odometer })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to update odometer: ${error.message}`);
+        }
+
+        return vehicle;
+    }
+
+    async updatePhoto(id: string, photoUrl: string): Promise<any> {
+        const { data: vehicle, error } = await supabaseAdmin
+            .from('vehicles')
+            .update({ photo_url: photoUrl })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error || !vehicle) {
+            throw new NotFoundException(`Failed to update vehicle photo: ${error?.message || 'Vehicle not found'}`);
+        }
+
+        return vehicle;
     }
 }

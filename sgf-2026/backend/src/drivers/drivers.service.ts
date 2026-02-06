@@ -1,79 +1,123 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
-import { Driver, DriverStatus } from './driver.entity';
-import { CreateDriverDto } from './dto/create-driver.dto';
-import { UpdateDriverDto } from './dto/update-driver.dto';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { supabaseAdmin } from '../config/supabase.config';
+import type { CreateDriverDto } from './dto/create-driver.dto';
+import type { UpdateDriverDto } from './dto/update-driver.dto';
+
+type DriverStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
 @Injectable()
 export class DriversService {
-    constructor(
-        @InjectRepository(Driver)
-        private readonly driverRepository: Repository<Driver>,
-    ) { }
+    async findAll(filters?: {
+        status?: DriverStatus;
+        departmentId?: string;
+    }): Promise<any[]> {
+        let query = supabaseAdmin
+            .from('drivers')
+            .select('*, department:departments(*)');
 
-    async create(createDriverDto: CreateDriverDto): Promise<Driver> {
-        const existingDriver = await this.driverRepository.findOne({
-            where: { cpf: createDriverDto.cpf },
-        });
-
-        if (existingDriver) {
-            throw new ConflictException('Driver with this CPF already exists');
+        if (filters?.status) {
+            query = query.eq('status', filters.status);
         }
 
-        const salt = await bcrypt.genSalt();
-        const passwordHash = await bcrypt.hash(createDriverDto.password, salt);
+        if (filters?.departmentId) {
+            query = query.eq('department_id', filters.departmentId);
+        }
 
-        const driver = this.driverRepository.create({
-            ...createDriverDto,
-            passwordHash,
-        });
+        const { data, error } = await query;
 
-        return this.driverRepository.save(driver);
+        if (error) {
+            throw new Error(`Failed to fetch drivers: ${error.message}`);
+        }
+
+        return data || [];
     }
 
-    async findAll(): Promise<Driver[]> {
-        return this.driverRepository.find({
-            order: { name: 'ASC' },
-        });
-    }
+    async findOne(id: string): Promise<any> {
+        const { data: driver, error } = await supabaseAdmin
+            .from('drivers')
+            .select('*, department:departments(*)')
+            .eq('id', id)
+            .single();
 
-    async findOne(id: string): Promise<Driver> {
-        const driver = await this.driverRepository.findOne({
-            where: { id },
-            relations: ['department'],
-        });
-
-        if (!driver) {
+        if (error || !driver) {
             throw new NotFoundException(`Driver with ID ${id} not found`);
         }
 
         return driver;
     }
 
-    async update(id: string, updateDriverDto: UpdateDriverDto): Promise<Driver> {
-        const driver = await this.findOne(id);
+    async findByCpf(cpf: string): Promise<any> {
+        const { data: driver, error } = await supabaseAdmin
+            .from('drivers')
+            .select('*, department:departments(*)')
+            .eq('cpf', cpf)
+            .single();
 
-        if (updateDriverDto.password) {
-            const salt = await bcrypt.genSalt();
-            updateDriverDto['passwordHash'] = await bcrypt.hash(updateDriverDto.password, salt);
-            delete updateDriverDto.password;
+        if (error || !driver) {
+            throw new NotFoundException(`Driver with CPF ${cpf} not found`);
         }
 
-        this.driverRepository.merge(driver, updateDriverDto);
-        return this.driverRepository.save(driver);
+        return driver;
+    }
+
+    async create(createDriverDto: CreateDriverDto): Promise<any> {
+        const { data: driver, error } = await supabaseAdmin
+            .from('drivers')
+            .insert([createDriverDto])
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to create driver: ${error.message}`);
+        }
+
+        return driver;
+    }
+
+    async update(id: string, updateDriverDto: UpdateDriverDto): Promise<any> {
+        // Verify driver exists first
+        await this.findOne(id);
+
+        const { data: driver, error } = await supabaseAdmin
+            .from('drivers')
+            .update(updateDriverDto)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to update driver: ${error.message}`);
+        }
+
+        return driver;
     }
 
     async remove(id: string): Promise<void> {
-        const driver = await this.findOne(id);
-        // Soft delete or status change is likely better, but strictly following CRUD for now
-        // Usually we just set status to INACTIVE
-        driver.status = DriverStatus.INACTIVE;
-        await this.driverRepository.save(driver);
+        // Verify driver exists first
+        await this.findOne(id);
+
+        const { error } = await supabaseAdmin
+            .from('drivers')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            throw new BadRequestException(`Failed to delete driver: ${error.message}`);
+        }
     }
 
-    async findByCpf(cpf: string): Promise<Driver | null> {
-        return this.driverRepository.findOne({ where: { cpf } });
+    async updateStatus(id: string, status: DriverStatus): Promise<any> {
+        const { data: driver, error } = await supabaseAdmin
+            .from('drivers')
+            .update({ status })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error || !driver) {
+            throw new NotFoundException(`Failed to update driver status: ${error?.message || 'Driver not found'}`);
+        }
+
+        return driver;
     }
 }

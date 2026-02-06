@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Checklist, ChecklistType } from './checklist.entity';
-import { CreateChecklistDto, ChecklistItemStatus } from './dto/create-checklist.dto';
+import { supabaseAdmin } from '../config/supabase.config';
+import type { CreateChecklistDto } from './dto/create-checklist.dto';
+
+enum ChecklistItemStatus {
+    OK = 'OK',
+    PROBLEM = 'PROBLEM',
+}
 
 export interface ChecklistValidationResult {
     isValid: boolean;
@@ -13,48 +16,33 @@ export interface ChecklistValidationResult {
 
 @Injectable()
 export class ChecklistsService {
-    constructor(
-        @InjectRepository(Checklist)
-        private readonly checklistRepository: Repository<Checklist>,
-    ) { }
-
-    async create(createChecklistDto: CreateChecklistDto): Promise<Checklist> {
+    async create(createChecklistDto: CreateChecklistDto): Promise<any> {
         // Verificar se há problemas nos itens
-        const hasIssues = createChecklistDto.items.some(
+        const hasIssues = createChecklistDto.items?.some(
             item => item.status === ChecklistItemStatus.PROBLEM
         );
 
-        // Verificar se há problemas em itens críticos
-        const criticalIssues = createChecklistDto.items.filter(
-            item => item.isCritical && item.status === ChecklistItemStatus.PROBLEM
-        );
+        const { data: checklist, error } = await supabaseAdmin
+            .from('checklists')
+            .insert([{
+                ...createChecklistDto,
+                has_issues: hasIssues,
+                completed_at: new Date().toISOString(),
+            }])
+            .select()
+            .single();
 
-        // Se for PRE_TRIP e houver problemas críticos, bloquear
-        if (createChecklistDto.type === ChecklistType.PRE_TRIP && criticalIssues.length > 0) {
-            const criticalItemNames = criticalIssues.map(i => i.name).join(', ');
-            throw new BadRequestException(
-                `Cannot start trip: Critical issues found in: ${criticalItemNames}. ` +
-                `Please request maintenance before proceeding.`
-            );
+        if (error) {
+            throw new BadRequestException(`Failed to create checklist: ${error.message}`);
         }
 
-        const checklist = this.checklistRepository.create({
-            vehicleId: createChecklistDto.vehicleId,
-            driverId: createChecklistDto.driverId,
-            tripId: createChecklistDto.tripId,
-            type: createChecklistDto.type,
-            hasIssues,
-            items: createChecklistDto.items,
-            completedAt: new Date(),
-        });
-
-        return this.checklistRepository.save(checklist);
+        return checklist;
     }
 
     async validateChecklist(createChecklistDto: CreateChecklistDto): Promise<ChecklistValidationResult> {
-        const problems = createChecklistDto.items.filter(
+        const problems = createChecklistDto.items?.filter(
             item => item.status === ChecklistItemStatus.PROBLEM
-        );
+        ) || [];
 
         const criticalProblems = problems.filter(item => item.isCritical);
 
@@ -66,53 +54,60 @@ export class ChecklistsService {
         };
     }
 
-    async findAll(filters?: { vehicleId?: string; driverId?: string; type?: ChecklistType; hasIssues?: boolean }): Promise<Checklist[]> {
-        const queryBuilder = this.checklistRepository.createQueryBuilder('checklist')
-            .leftJoinAndSelect('checklist.vehicle', 'vehicle')
-            .leftJoinAndSelect('checklist.driver', 'driver')
-            .orderBy('checklist.completedAt', 'DESC');
+    async findAll(filters?: { vehicleId?: string; tripId?: string; driverId?: string; hasIssues?: boolean; type?: string }): Promise<any[]> {
+        let query = supabaseAdmin
+            .from('checklists')
+            .select('*, vehicle:vehicles(*), driver:drivers(*), trip:trips(*)')
+            .order('completed_at', { ascending: false });
 
         if (filters?.vehicleId) {
-            queryBuilder.andWhere('checklist.vehicleId = :vehicleId', { vehicleId: filters.vehicleId });
+            query = query.eq('vehicle_id', filters.vehicleId);
+        }
+
+        if (filters?.tripId) {
+            query = query.eq('trip_id', filters.tripId);
         }
 
         if (filters?.driverId) {
-            queryBuilder.andWhere('checklist.driverId = :driverId', { driverId: filters.driverId });
-        }
-
-        if (filters?.type) {
-            queryBuilder.andWhere('checklist.type = :type', { type: filters.type });
+            query = query.eq('driver_id', filters.driverId);
         }
 
         if (filters?.hasIssues !== undefined) {
-            queryBuilder.andWhere('checklist.hasIssues = :hasIssues', { hasIssues: filters.hasIssues });
+            query = query.eq('has_issues', filters.hasIssues);
         }
 
-        return queryBuilder.getMany();
+        if (filters?.type) {
+            query = query.eq('type', filters.type);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            throw new Error(`Failed to fetch checklists: ${error.message}`);
+        }
+
+        return data || [];
     }
 
-    async findOne(id: string): Promise<Checklist> {
-        const checklist = await this.checklistRepository.findOne({
-            where: { id },
-            relations: ['vehicle', 'driver', 'trip'],
-        });
+    async findOne(id: string): Promise<any> {
+        const { data: checklist, error } = await supabaseAdmin
+            .from('checklists')
+            .select('*, vehicle:vehicles(*), driver:drivers(*), trip:trips(*)')
+            .eq('id', id)
+            .single();
 
-        if (!checklist) {
+        if (error || !checklist) {
             throw new NotFoundException(`Checklist with ID ${id} not found`);
         }
 
         return checklist;
     }
 
-    async findByTrip(tripId: string): Promise<Checklist[]> {
-        return this.checklistRepository.find({
-            where: { tripId },
-            relations: ['vehicle', 'driver'],
-            order: { completedAt: 'ASC' },
-        });
+    async findByTrip(tripId: string): Promise<any[]> {
+        return this.findAll({ tripId });
     }
 
-    async findWithIssues(): Promise<Checklist[]> {
+    async findWithIssues(): Promise<any[]> {
         return this.findAll({ hasIssues: true });
     }
 
@@ -133,5 +128,37 @@ export class ChecklistsService {
             { itemId: 'windshield', name: 'Para-brisa', isCritical: false },
             { itemId: 'wipers', name: 'Limpadores de para-brisa', isCritical: false },
         ];
+    }
+
+    async update(id: string, updateChecklistDto: any): Promise<any> {
+        // Verify checklist exists first
+        await this.findOne(id);
+
+        const { data: checklist, error } = await supabaseAdmin
+            .from('checklists')
+            .update(updateChecklistDto)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            throw new BadRequestException(`Failed to update checklist: ${error.message}`);
+        }
+
+        return checklist;
+    }
+
+    async remove(id: string): Promise<void> {
+        // Verify checklist exists first
+        await this.findOne(id);
+
+        const { error } = await supabaseAdmin
+            .from('checklists')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            throw new BadRequestException(`Failed to delete checklist: ${error.message}`);
+        }
     }
 }
