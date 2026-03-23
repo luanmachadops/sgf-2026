@@ -4,6 +4,8 @@ export interface User {
     email: string;
     name: string;
     role: 'ADMIN' | 'MANAGER' | 'VIEWER';
+    departmentId?: string;
+    departmentName?: string;
     createdAt: string;
     photoUrl?: string;
 }

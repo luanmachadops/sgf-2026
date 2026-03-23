@@ -18,7 +18,7 @@ import {
     Filter,
 } from 'lucide-react';
 import { getStatusLabel, getStatusColor, formatDistance } from '@/lib/utils';
-import { vehiclesApi } from '@/lib/api';
+import { vehiclesApi } from '@/lib/supabase-api';
 import { NewVehicleForm } from '@/components/vehicles/NewVehicleForm';
 import { useHeader } from '@/contexts/HeaderContext';
 import { SGFKPICard } from '@/components/sgf/SGFKPICard';

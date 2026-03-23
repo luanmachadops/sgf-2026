@@ -12,26 +12,53 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Fetches the user profile from the `users` table.
+ * Falls back to auth metadata if no profile row exists.
+ */
+async function fetchUserProfile(authUser: { id: string; email?: string; user_metadata?: Record<string, unknown> }): Promise<User> {
+    const { data: profile, error } = await supabase
+        .from('users')
+        .select('*, departments(id, name)')
+        .eq('user_id', authUser.id)
+        .single();
+
+    if (profile && !error) {
+        const dept = (profile as unknown as { departments?: { id: string; name: string } }).departments;
+        return {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            role: profile.role as User['role'],
+            departmentId: profile.department_id || undefined,
+            departmentName: dept?.name,
+            createdAt: profile.created_at || new Date().toISOString(),
+        };
+    }
+
+    // Fallback: use auth metadata (new user without profile row)
+    return {
+        id: authUser.id,
+        email: authUser.email || '',
+        name: (authUser.user_metadata?.name as string) || 'Usuário',
+        role: (authUser.user_metadata?.role as User['role']) || 'VIEWER',
+        createdAt: new Date().toISOString(),
+    };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Check for existing session on mount
         const initAuth = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
 
                 if (session) {
                     setToken(session.access_token);
-                    const userData: User = {
-                        id: session.user.id,
-                        email: session.user.email || '',
-                        name: session.user.user_metadata?.name || 'Usuário',
-                        role: session.user.user_metadata?.role || 'USER',
-                        createdAt: new Date().toISOString(),
-                    };
+                    const userData = await fetchUserProfile(session.user);
                     setUser(userData);
                     localStorage.setItem('token', session.access_token);
                     localStorage.setItem('user', JSON.stringify(userData));
@@ -50,13 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             async (event, session) => {
                 if (session) {
                     setToken(session.access_token);
-                    const userData: User = {
-                        id: session.user.id,
-                        email: session.user.email || '',
-                        name: session.user.user_metadata?.name || 'Usuário',
-                        role: session.user.user_metadata?.role || 'USER',
-                        createdAt: new Date().toISOString(),
-                    };
+                    const userData = await fetchUserProfile(session.user);
                     setUser(userData);
                     localStorage.setItem('token', session.access_token);
                     localStorage.setItem('user', JSON.stringify(userData));
@@ -88,13 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (data.session) {
                 setToken(data.session.access_token);
-                const userData: User = {
-                    id: data.user.id,
-                    email: data.user.email || '',
-                    name: data.user.user_metadata?.name || 'Usuário',
-                    role: data.user.user_metadata?.role || 'USER',
-                    createdAt: new Date().toISOString(),
-                };
+                const userData = await fetchUserProfile(data.user);
                 setUser(userData);
                 localStorage.setItem('token', data.session.access_token);
                 localStorage.setItem('user', JSON.stringify(userData));

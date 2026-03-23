@@ -46,21 +46,25 @@ flutter run
 
 ## 📊 Status da Implementação
 
-### ✅ Backend (70% concluído)
-- ✅ Configuração NestJS + TypeORM
-- ✅ Conexão com Supabase
-- ✅ Todas as entidades criadas
-- ✅ Módulo de Veículos completo
-- ⏳ Módulos restantes (Drivers, Trips, etc)
-- ⏳ Autenticação JWT
+### ✅ Banco de Dados (100% concluído)
+- ✅ Dependências completas (tabelas, triggers, functions)
+- ✅ Migrações SQL e seeds
+- ✅ Row Level Security (RLS) configurado
 
-### ⏳ Banco de Dados (100% concluído)
-- ✅ 8 tabelas criadas no Supabase
-- ✅ Migrações SQL
-- ✅ Dados de seed
+### 🚧 Web (React) - ~70% concluído
+- ✅ Configuração React + Vite + TypeScript (com Tailwind e Lucide)
+- ✅ Integração direta com Supabase
+- ✅ Dashboard interativo e KPIs
+- ✅ Telas de Veículos, Motoristas, Viagens e Abastecimentos
+- ⏳ Melhorias UX e features extras
 
-### ⏳ Web (0% - Não iniciado)
-### ⏳ Mobile (0% - Não iniciado)
+### ⏳ Backend NestJS - Em stand-by (usado futuramente para o Mobile)
+- ✅ Configuração NestJS + TypeORM conectando ao Supabase
+- ✅ Módulo base (Veículos)
+- *Para o MVP Web, o backend não está sendo utilizado, pois o Painel Web consome o Supabase diretamente.*
+
+### ⏳ Mobile (Flutter) - Não iniciado (0%)
+- Será desenvolvido nas próximas etapas utilizando a API NestJS.
 
 ## 🗄️ Banco de Dados
 
@@ -98,9 +102,9 @@ flutter run
 Este é um projeto municipal. Consulte as especificações completas em `sgf-2026-documentacao.md`.
 
 ## 📝 Próximos Passos
-
-1. [ ] Completar módulos restantes do backend
-2. [ ] Implementar autenticação
-3. [ ] Iniciar desenvolvimento do painel web React
-4. [ ] Iniciar desenvolvimento do app mobile Flutter
-5. [ ] Testes end-to-end integrados
+1. [x] Desenvolver painel Web (MVP focado no Dashboard e Módulos CRUD).
+2. [x] Habilitar RLS e Policies no Supabase (Segurança de Banco de Dados).
+3. [x] Configurar Edge Functions (APIs para Dashboard e Validações customizadas).
+4. [ ] Realizar Deploy do Frontend na Vercel (MVP Web 100% Serverless).
+5. [ ] Configuração de Contas e Produção Inicial (Adição de Admin).
+6. [ ] Retomar desenvolvimento do Backend NestJS como ponte para App Mobile Flutter.

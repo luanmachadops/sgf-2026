@@ -45,13 +45,13 @@ function LayoutWithHeader() {
                 onToggle={toggleSidebar}
             />
 
-            <div className="flex flex-1 flex-col overflow-hidden">
-                <Header onMenuClick={toggleSidebar} />
-
+            <div className="flex flex-1 flex-col overflow-hidden p-0 relative">
                 {/* Main Content Area - Single Container */}
-                <div className="flex-1 flex flex-col overflow-hidden mt-4 ml-6 rounded-tl-[32px] bg-[#E3E9E7] shadow-2xl relative">
-                    <main className="flex-1 overflow-y-auto p-8 scroll-smooth custom-scrollbar">
-                        <div className="w-full">
+                <div className="flex-1 flex flex-col overflow-hidden lg:mt-[var(--sgf-space-4)] lg:ml-[var(--sgf-space-6)] mt-0 ml-0 lg:rounded-tl-[32px] rounded-none bg-[#E3E9E7] shadow-none lg:shadow-2xl relative">
+                    <Header onMenuClick={toggleSidebar} />
+                    
+                    <main className="flex-1 overflow-y-auto p-[var(--sgf-space-4)] md:p-[var(--sgf-space-8)] scroll-smooth custom-scrollbar">
+                        <div className="w-full max-w-[1400px] mx-auto">
                             <Outlet />
                         </div>
                     </main>

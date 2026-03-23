@@ -6,7 +6,7 @@ import { SGFInput } from '@/components/sgf/SGFInput';
 import { SGFSelect } from '@/components/sgf/SGFSelect';
 import { SGFButton } from '@/components/sgf/SGFButton';
 import { Loader2, Save, Car, Bike, Truck, Bus, CarFront, Ambulance, Camera, Upload, Tractor } from 'lucide-react';
-import { vehiclesApi } from '@/lib/api';
+import { vehiclesApi } from '@/lib/supabase-api';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { resizeAndConvertToWebP, isImageFile } from '@/lib/imageUtils';

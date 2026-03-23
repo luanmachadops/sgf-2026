@@ -5,8 +5,6 @@ import {
   BarChart,
   Bar,
   XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Cell
@@ -31,9 +29,9 @@ export interface SGFKPICardProps {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#0F2B2F]/50 border border-white/10 p-2 rounded-xl shadow-2xl backdrop-blur-md text-center">
-        <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">{label}</p>
-        <p className="text-sm font-black text-white">{payload[0].value.toLocaleString('pt-BR')}</p>
+      <div className="bg-[#0F2B2F]/50 border border-white/10 p-[var(--sgf-space-2)] rounded-[var(--sgf-radius-base)] shadow-[var(--sgf-shadow-xl)] backdrop-blur-md text-center">
+        <p className="text-[var(--sgf-text-2xs)] text-white/40 font-[var(--sgf-font-bold)] uppercase tracking-wider mb-[var(--sgf-space-1)]">{label}</p>
+        <p className="text-[var(--sgf-text-sm)] font-[var(--sgf-font-black)] text-white">{payload[0].value.toLocaleString('pt-BR')}</p>
       </div>
     );
   }
@@ -56,18 +54,18 @@ export const SGFKPICard: React.FC<SGFKPICardProps> = ({
       onClick={onClick}
       className={`group h-full ${onClick ? 'cursor-pointer' : ''}`}
     >
-      <div className="flex items-center justify-between h-full gap-4">
+      <div className="flex items-center justify-between h-full gap-[var(--sgf-space-4)]">
         {/* Left Side: Info */}
-        <div className="flex flex-col gap-2 flex-1 min-w-0">
-          <div className={`p-2.5 w-fit rounded-xl bg-slate-50 group-hover:scale-110 transition-transform duration-500 ${iconColor}`}>
+        <div className="flex flex-col gap-[var(--sgf-space-2)] flex-1 min-w-0">
+          <div className={`p-[var(--sgf-space-3)] w-fit rounded-[var(--sgf-radius-base)] bg-slate-50 group-hover:scale-110 transition-transform duration-500 ${iconColor}`}>
             <Icon size={20} />
           </div>
           <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 truncate">{title}</p>
+            <p className="text-slate-400 text-[var(--sgf-text-xs)] font-[var(--sgf-font-bold)] uppercase tracking-wider mb-[var(--sgf-space-1)] truncate">{title}</p>
             {loading ? (
-              <div className="h-9 bg-slate-100 rounded-lg animate-pulse w-24" />
+              <div className="h-9 bg-slate-100 rounded-[var(--sgf-radius-md)] animate-pulse w-24" />
             ) : (
-              <h3 className="text-3xl font-black text-slate-800 tracking-tight">{value}</h3>
+              <h3 className="text-[var(--sgf-text-3xl)] font-[var(--sgf-font-black)] text-slate-800 tracking-tight leading-[var(--sgf-leading-tight)]">{value}</h3>
             )}
           </div>
         </div>
@@ -104,4 +102,3 @@ export const SGFKPICard: React.FC<SGFKPICardProps> = ({
     </SGFCard>
   );
 };
-

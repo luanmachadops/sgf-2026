@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { formatDate, formatDistance, formatCurrency, getStatusLabel, getStatusColor } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { vehiclesApi } from '@/lib/api';
+import { vehiclesApi } from '@/lib/supabase-api';
 import { resizeAndConvertToWebP, isImageFile } from '@/lib/imageUtils';
 import { toast } from 'sonner';
 

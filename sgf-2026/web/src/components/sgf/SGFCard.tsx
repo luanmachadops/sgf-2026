@@ -18,24 +18,32 @@ export const SGFCard = React.forwardRef<HTMLDivElement, SGFCardProps>(
     },
     ref
   ) => {
-    const baseStyles = 'rounded-3xl transition-all duration-300';
+    // Using CSS custom properties for global control
+    const baseStyles = `
+      rounded-[var(--sgf-card-radius)]
+      transition-all
+      duration-[var(--sgf-transition-base)]
+    `;
 
     const variantStyles = {
       default: 'bg-white',
-      elevated: 'bg-white shadow-xl shadow-slate-200/50',
-      bordered: 'bg-white border-2 border-[var(--sgf-primary)]/20',
+      elevated: 'bg-white shadow-[var(--sgf-shadow-lg)]',
+      bordered: 'bg-white border border-slate-200',
       glass: 'bg-white/80 backdrop-blur-md',
     };
 
-    const paddingStyles = {
-      none: '',
-      sm: 'p-4',
-      md: 'p-6',
-      lg: 'p-8',
-      xl: 'p-10',
+    // Padding uses CSS tokens via inline styles for precise control
+    const paddingMap = {
+      none: '0',
+      sm: 'var(--sgf-card-padding-sm)',
+      md: 'var(--sgf-card-padding)',
+      lg: 'var(--sgf-card-padding-lg)',
+      xl: 'var(--sgf-space-10)',
     };
 
-    const hoverStyles = hover ? 'hover:shadow-xl hover:-translate-y-1 cursor-pointer' : '';
+    const hoverStyles = hover
+      ? 'hover:shadow-[var(--sgf-shadow-xl)] hover:-translate-y-0.5 cursor-pointer'
+      : '';
 
     return (
       <div
@@ -43,10 +51,10 @@ export const SGFCard = React.forwardRef<HTMLDivElement, SGFCardProps>(
         className={`
           ${baseStyles}
           ${variantStyles[variant]}
-          ${paddingStyles[padding]}
           ${hoverStyles}
           ${className}
-        `}
+        `.trim().replace(/\s+/g, ' ')}
+        style={{ padding: paddingMap[padding] }}
         {...props}
       >
         {children}

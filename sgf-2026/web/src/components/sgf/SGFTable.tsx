@@ -26,11 +26,11 @@ export function SGFTable<T>({
 }: SGFTableProps<T>) {
   if (loading) {
     return (
-      <div className="bg-white rounded-[2.5rem] overflow-hidden">
-        <div className="p-8">
-          <div className="h-8 bg-slate-100 rounded-lg animate-pulse mb-4" />
+      <div className="bg-white rounded-[var(--sgf-card-radius)] overflow-hidden">
+        <div className="p-[var(--sgf-space-8)]">
+          <div className="h-8 bg-slate-100 rounded-[var(--sgf-radius-md)] animate-pulse mb-[var(--sgf-space-4)]" />
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-slate-50 rounded-lg animate-pulse mb-2" />
+            <div key={i} className="h-16 bg-slate-50 rounded-[var(--sgf-radius-md)] animate-pulse mb-[var(--sgf-space-2)]" />
           ))}
         </div>
       </div>
@@ -39,24 +39,24 @@ export function SGFTable<T>({
 
   if (data.length === 0) {
     return (
-      <div className="bg-white rounded-[2.5rem] overflow-hidden p-12">
+      <div className="bg-white rounded-[var(--sgf-card-radius)] overflow-hidden p-[var(--sgf-space-12)]">
         <div className="text-center">
-          <p className="text-slate-400 text-lg">{emptyMessage}</p>
+          <p className="text-slate-400 text-[var(--sgf-text-lg)]">{emptyMessage}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-[2.5rem] overflow-hidden">
+    <div className="bg-white rounded-[var(--sgf-card-radius)] overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="bg-slate-50/50 text-[10px] uppercase font-black text-slate-400 tracking-[0.15em]">
+          <thead className="bg-slate-50/50 text-[var(--sgf-text-2xs)] uppercase font-[var(--sgf-font-black)] text-slate-400 tracking-[0.15em]">
             <tr>
               {columns.map((column, index) => (
                 <th
                   key={index}
-                  className={`px-8 py-5 ${column.headerClassName || ''}`}
+                  className={`px-[var(--sgf-table-cell-padding-x)] py-[var(--sgf-space-5)] ${column.headerClassName || ''}`}
                 >
                   {column.header}
                 </th>
@@ -67,14 +67,14 @@ export function SGFTable<T>({
             {data.map((row, rowIndex) => (
               <tr
                 key={keyExtractor(row, rowIndex)}
-                className={`hover:bg-slate-50/40 transition-all group ${onRowClick ? 'cursor-pointer' : ''
+                className={`hover:bg-slate-50/40 transition-all duration-[var(--sgf-transition-fast)] group ${onRowClick ? 'cursor-pointer' : ''
                   }`}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((column, colIndex) => (
                   <td
                     key={colIndex}
-                    className={`px-8 py-5 ${column.className || ''}`}
+                    className={`px-[var(--sgf-table-cell-padding-x)] py-[var(--sgf-table-cell-padding-y)] ${column.className || ''}`}
                   >
                     {typeof column.accessor === 'function'
                       ? column.accessor(row)

@@ -1,11 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vehiclesApi } from '@/lib/api';
-import type { Vehicle, VehicleFilters } from '@/types';
+import { vehiclesApi } from '@/lib/supabase-api';
+import type { VehicleFilters } from '@/types';
+import type { TablesInsert, TablesUpdate } from '@/types/database.types';
 
 export function useVehicles(filters?: VehicleFilters) {
     return useQuery({
         queryKey: ['vehicles', filters],
-        queryFn: () => vehiclesApi.getAll(filters),
+        queryFn: () => vehiclesApi.getAll(filters ? {
+            departmentId: filters.departmentId,
+            status: filters.status,
+            search: filters.search,
+            page: filters.page,
+            limit: filters.limit,
+        } : undefined),
     });
 }
 
@@ -17,19 +24,11 @@ export function useVehicle(id: string) {
     });
 }
 
-export function useVehicleHistory(id: string) {
-    return useQuery({
-        queryKey: ['vehicle', id, 'history'],
-        queryFn: () => vehiclesApi.getHistory(id),
-        enabled: !!id,
-    });
-}
-
 export function useCreateVehicle() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (data: Partial<Vehicle>) => vehiclesApi.create(data),
+        mutationFn: (data: TablesInsert<'vehicles'>) => vehiclesApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['vehicles'] });
         },
@@ -40,7 +39,7 @@ export function useUpdateVehicle() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: Partial<Vehicle> }) =>
+        mutationFn: ({ id, data }: { id: string; data: TablesUpdate<'vehicles'> }) =>
             vehiclesApi.update(id, data),
         onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: ['vehicles'] });

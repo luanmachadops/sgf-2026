@@ -21,7 +21,12 @@ export const SGFBadge = React.forwardRef<HTMLSpanElement, SGFBadgeProps>(
     },
     ref
   ) => {
-    const baseStyles = 'inline-flex items-center gap-1.5 font-bold rounded-full transition-colors';
+    const baseStyles = `
+      inline-flex items-center gap-1.5
+      font-[var(--sgf-font-bold)]
+      rounded-[var(--sgf-radius-full)]
+      transition-colors duration-[var(--sgf-transition-fast)]
+    `;
 
     const variantStyles = {
       default: 'bg-slate-100 text-slate-700',
@@ -35,10 +40,11 @@ export const SGFBadge = React.forwardRef<HTMLSpanElement, SGFBadgeProps>(
       alert: 'bg-red-100 text-red-700 animate-pulse',
     };
 
+    // Using design tokens for consistent spacing
     const sizeStyles = {
-      sm: 'px-2 py-0.5 text-[10px]',
-      md: 'px-3 py-1 text-xs',
-      lg: 'px-4 py-1.5 text-sm',
+      sm: 'px-[var(--sgf-space-2)] py-[2px] text-[var(--sgf-text-2xs)]',
+      md: 'px-[var(--sgf-space-3)] py-[var(--sgf-space-1)] text-[var(--sgf-text-xs)]',
+      lg: 'px-[var(--sgf-space-4)] py-[6px] text-[var(--sgf-text-sm)]',
     };
 
     const dotColors = {
@@ -67,7 +73,7 @@ export const SGFBadge = React.forwardRef<HTMLSpanElement, SGFBadgeProps>(
           ${variantStyles[variant]}
           ${sizeStyles[size]}
           ${className}
-        `}
+        `.trim().replace(/\s+/g, ' ')}
         {...props}
       >
         {dot && (
