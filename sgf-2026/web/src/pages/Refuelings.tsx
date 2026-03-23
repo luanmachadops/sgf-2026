@@ -22,14 +22,16 @@ import {
     Car,
     Receipt,
     Plus,
+    DollarSign,
+    User,
+    MapPin,
 } from 'lucide-react';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDate, formatCurrency, cn } from '@/lib/utils';
 import { useHeader } from '@/contexts/HeaderContext';
 import { useEffect } from 'react';
 import { SGFKPICard } from '@/components/sgf/SGFKPICard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NewRefuelingForm } from '@/components/refuelings/NewRefuelingForm';
-import { DollarSign, User, MapPin } from 'lucide-react';
 
 // Mock data
 const mockRefuelings = [

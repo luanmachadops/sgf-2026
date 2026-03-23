@@ -21,6 +21,7 @@ import {
     Car,
     Calendar,
     DollarSign,
+    FileText,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { useHeader } from '@/contexts/HeaderContext';
