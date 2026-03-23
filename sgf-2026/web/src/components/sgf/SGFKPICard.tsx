@@ -22,6 +22,8 @@ export interface SGFKPICardProps {
   iconColor?: string;
   chartData?: SGFKPIChartData[];
   chartColor?: string;
+  percentage?: number;
+  trend?: 'up' | 'down' | string;
   loading?: boolean;
   onClick?: () => void;
 }
@@ -45,6 +47,8 @@ export const SGFKPICard: React.FC<SGFKPICardProps> = ({
   iconColor = 'text-emerald-500',
   chartData = [],
   chartColor = '#10b981', // emerald-500
+  percentage,
+  trend,
   loading = false,
   onClick,
 }) => {
@@ -65,7 +69,14 @@ export const SGFKPICard: React.FC<SGFKPICardProps> = ({
             {loading ? (
               <div className="h-9 bg-slate-100 rounded-[var(--sgf-radius-md)] animate-pulse w-24" />
             ) : (
-              <h3 className="text-[var(--sgf-text-3xl)] font-[var(--sgf-font-black)] text-slate-800 tracking-tight leading-[var(--sgf-leading-tight)]">{value}</h3>
+              <>
+                <h3 className="text-[var(--sgf-text-3xl)] font-[var(--sgf-font-black)] text-slate-800 tracking-tight leading-[var(--sgf-leading-tight)]">{value}</h3>
+                {percentage !== undefined && trend && (
+                  <p className={`mt-1 text-[var(--sgf-text-xs)] font-[var(--sgf-font-bold)] ${trend === 'up' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {trend === 'up' ? '+' : '-'}{percentage}% vs. periodo anterior
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>

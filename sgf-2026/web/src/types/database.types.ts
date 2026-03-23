@@ -89,6 +89,7 @@ export type Database = {
                 Row: {
                     cnh_category: string
                     cnh_expiry_date: string
+                    cnh_number: string
                     cpf: string
                     created_at: string | null
                     department_id: string | null
@@ -106,6 +107,7 @@ export type Database = {
                 Insert: {
                     cnh_category: string
                     cnh_expiry_date: string
+                    cnh_number: string
                     cpf: string
                     created_at?: string | null
                     department_id?: string | null
@@ -123,6 +125,7 @@ export type Database = {
                 Update: {
                     cnh_category?: string
                     cnh_expiry_date?: string
+                    cnh_number?: string
                     cpf?: string
                     created_at?: string | null
                     department_id?: string | null

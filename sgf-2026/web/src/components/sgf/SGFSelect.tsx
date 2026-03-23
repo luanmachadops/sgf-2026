@@ -12,6 +12,7 @@ export interface SGFSelectProps {
   label?: string;
   error?: string;
   hint?: string;
+  icon?: React.ElementType;
   options: SGFSelectOption[];
   fullWidth?: boolean;
   value?: string;
@@ -30,6 +31,7 @@ export const SGFSelect = React.forwardRef<HTMLDivElement, SGFSelectProps>(
       label,
       error,
       hint,
+      icon: Icon,
       options,
       fullWidth = false,
       value: controlledValue,
@@ -101,6 +103,7 @@ export const SGFSelect = React.forwardRef<HTMLDivElement, SGFSelectProps>(
         >
           <span className={cn('flex items-center gap-2 truncate pr-2', selectedOption ? 'text-slate-900 font-medium' : 'text-slate-400')}>
             {selectedOption?.icon && <selectedOption.icon className="h-4 w-4 shrink-0 text-slate-400" />}
+            {!selectedOption?.icon && Icon && <Icon className="h-4 w-4 shrink-0 text-slate-400" />}
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <ChevronDown

@@ -1,29 +1,32 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { SGFInput } from '@/components/sgf/SGFInput';
 import { SGFSelect } from '@/components/sgf/SGFSelect';
 import { SGFButton } from '@/components/sgf/SGFButton';
-import { Loader2, Save, Camera, Upload, User } from 'lucide-react';
-import { driversApi } from '@/lib/supabase-api';
+import { Loader2, Save, Camera, User } from 'lucide-react';
+import { departmentsApi, driversApi } from '@/lib/supabase-api';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
-import { resizeAndConvertToWebP, isImageFile } from '@/lib/imageUtils';
+import { isImageFile } from '@/lib/imageUtils';
+import type { TablesInsert } from '@/types/database.types';
+import { useAuth } from '@/contexts/AuthContext';
 
 const driverSchema = z.object({
     name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
     cpf: z.string().min(11, 'CPF inválido').max(14, 'CPF inválido'),
+    registrationNumber: z.string().min(1, 'Matrícula é obrigatória'),
     phone: z.string().min(10, 'Telefone inválido'),
     email: z.string().email('E-mail inválido'),
     licenseNumber: z.string().min(1, 'Número da CNH é obrigatório'),
     licenseCategory: z.string().min(1, 'Categoria é obrigatória'),
     licenseExpiry: z.string().min(1, 'Validade da CNH é obrigatória'),
-    department: z.string().min(1, 'Secretaria é obrigatória'),
+    departmentId: z.string().uuid('Secretaria é obrigatória'),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
 });
 
 type DriverFormData = z.infer<typeof driverSchema>;
+type DriverFormInput = z.input<typeof driverSchema>;
 
 interface NewDriverFormProps {
     onSuccess: () => void;
@@ -31,24 +34,60 @@ interface NewDriverFormProps {
 }
 
 export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
-    const [isUploading, setIsUploading] = useState(false);
+    const { user } = useAuth();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+    const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: string; label: string }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const {
         register,
         handleSubmit,
         control,
+        setValue,
         formState: { errors, isSubmitting: isFormSubmitting },
-    } = useForm({
+    } = useForm<DriverFormInput>({
         resolver: zodResolver(driverSchema),
         defaultValues: {
             status: 'ACTIVE',
+            departmentId: user?.departmentId ?? '',
         },
     });
 
-    const isSubmitting = isFormSubmitting || isUploading;
+    useEffect(() => {
+        if (user?.departmentId) {
+            setValue('departmentId', user.departmentId);
+        }
+    }, [setValue, user?.departmentId]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadDepartments = async () => {
+            try {
+                const departments = await departmentsApi.getAll();
+                if (!isMounted) return;
+
+                setDepartmentOptions(
+                    departments.map((department) => ({
+                        value: department.id,
+                        label: department.name,
+                    }))
+                );
+            } catch (error) {
+                console.error('Error loading departments:', error);
+                toast.error('Não foi possível carregar as secretarias.');
+            }
+        };
+
+        loadDepartments();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const isSubmitting = isFormSubmitting;
 
     const handlePhotoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -69,42 +108,25 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
         reader.readAsDataURL(file);
     };
 
-    const onSubmit = async (data: DriverFormData) => {
+    const onSubmit = async (data: DriverFormInput) => {
         try {
-            // 1. Create driver
-            const createdDriver = await driversApi.create(data);
-            const driverId = createdDriver.id;
+            const driverPayload: TablesInsert<'drivers'> = {
+                name: data.name.trim(),
+                cpf: data.cpf.replace(/\D/g, ''),
+                registration_number: data.registrationNumber.trim(),
+                cnh_number: data.licenseNumber.trim(),
+                cnh_category: data.licenseCategory,
+                cnh_expiry_date: data.licenseExpiry,
+                department_id: data.departmentId,
+                phone: data.phone.trim(),
+                email: data.email.trim().toLowerCase(),
+                status: data.status ?? 'ACTIVE',
+            };
 
-            // 2. Upload photo if selected
-            if (selectedFile && driverId) {
-                setIsUploading(true);
-                try {
-                    toast.info('Fazendo upload da foto...');
-                    const optimizedBlob = await resizeAndConvertToWebP(selectedFile, 1000);
-                    const fileName = `driver-${driverId}-${Date.now()}.webp`;
+            await driversApi.create(driverPayload);
 
-                    const { error: uploadError } = await supabase.storage
-                        .from('driver-photos')
-                        .upload(fileName, optimizedBlob, {
-                            contentType: 'image/webp',
-                            upsert: true,
-                        });
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('driver-photos')
-                        .getPublicUrl(fileName);
-
-                    await driversApi.updatePhoto(driverId, publicUrl);
-                    toast.success('Foto enviada com sucesso!');
-
-                } catch (photoError) {
-                    console.error('Photo upload failed:', photoError);
-                    toast.warning('Motorista cadastrado, mas houve erro ao enviar a foto.');
-                } finally {
-                    setIsUploading(false);
-                }
+            if (selectedFile) {
+                toast.warning('O upload de foto para motoristas ainda não está disponível nesta versão.');
             }
 
             toast.success('Motorista cadastrado com sucesso!');
@@ -189,12 +211,22 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <SGFInput
+                            label="Matrícula"
+                            placeholder="MT001"
+                            {...register('registrationNumber')}
+                            error={errors.registrationNumber?.message}
+                            fullWidth
+                        />
+                        <SGFInput
                             label="Telefone"
                             placeholder="(00) 00000-0000"
                             {...register('phone')}
                             error={errors.phone?.message}
                             fullWidth
                         />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                         <SGFInput
                             label="E-mail"
                             placeholder="email@exemplo.com"
@@ -203,9 +235,6 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
                             error={errors.email?.message}
                             fullWidth
                         />
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
                         <SGFInput
                             label="Número da CNH"
                             placeholder="12345678900"
@@ -213,6 +242,9 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
                             error={errors.licenseNumber?.message}
                             fullWidth
                         />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                         <Controller
                             name="licenseCategory"
                             control={control}
@@ -248,21 +280,16 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
 
                     <div className="grid grid-cols-2 gap-4">
                         <Controller
-                            name="department"
+                            name="departmentId"
                             control={control}
                             render={({ field }) => (
                                 <SGFSelect
                                     label="Secretaria"
-                                    options={[
-                                        { value: 'Obras', label: 'Obras' },
-                                        { value: 'Saúde', label: 'Saúde' },
-                                        { value: 'Educação', label: 'Educação' },
-                                        { value: 'Transporte', label: 'Transporte' },
-                                        { value: 'Administração', label: 'Administração' },
-                                    ]}
+                                    options={departmentOptions}
                                     value={field.value}
                                     onChange={field.onChange}
-                                    error={errors.department?.message}
+                                    error={errors.departmentId?.message}
+                                    placeholder="Selecione a secretaria"
                                     fullWidth
                                 />
                             )}

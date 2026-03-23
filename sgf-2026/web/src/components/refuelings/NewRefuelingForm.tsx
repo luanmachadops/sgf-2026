@@ -20,6 +20,7 @@ const refuelingSchema = z.object({
 });
 
 type RefuelingFormData = z.infer<typeof refuelingSchema>;
+type RefuelingFormInput = z.input<typeof refuelingSchema>;
 
 interface NewRefuelingFormProps {
     onSuccess: () => void;
@@ -45,16 +46,20 @@ export function NewRefuelingForm({ onSuccess, onCancel }: NewRefuelingFormProps)
         watch,
         setValue,
         formState: { errors, isSubmitting },
-    } = useForm({
+    } = useForm<RefuelingFormInput, unknown, RefuelingFormData>({
         resolver: zodResolver(refuelingSchema),
         defaultValues: {
             date: new Date().toISOString().split('T')[0],
             fuelType: 'gasolina',
+            liters: 0,
+            pricePerLiter: 0,
+            totalValue: 0,
+            odometer: 0,
         },
     });
 
-    const liters = watch('liters');
-    const pricePerLiter = watch('pricePerLiter');
+    const liters = Number(watch('liters') || 0);
+    const pricePerLiter = Number(watch('pricePerLiter') || 0);
 
     // Auto-calculate total or price per liter
     React.useEffect(() => {

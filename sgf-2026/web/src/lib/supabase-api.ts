@@ -5,7 +5,7 @@
  */
 
 import { supabase } from './supabase';
-import type { Tables, TablesInsert, TablesUpdate } from '@/types/database.types';
+import type { Enums, Tables, TablesInsert, TablesUpdate } from '@/types/database.types';
 
 // ========================================
 // ERROR HANDLING
@@ -51,7 +51,7 @@ export const vehiclesApi = {
             query = query.eq('department_id', filters.departmentId);
         }
         if (filters?.status) {
-            query = query.eq('status', filters.status);
+            query = query.eq('status', filters.status as Enums<'vehicle_status'>);
         }
         if (filters?.search) {
             query = query.or(
@@ -141,7 +141,7 @@ export const driversApi = {
             query = query.eq('department_id', filters.departmentId);
         }
         if (filters?.status) {
-            query = query.eq('status', filters.status);
+            query = query.eq('status', filters.status as Enums<'driver_status'>);
         }
         if (filters?.search) {
             query = query.or(
@@ -221,7 +221,7 @@ export const tripsApi = {
 
         if (filters?.vehicleId) query = query.eq('vehicle_id', filters.vehicleId);
         if (filters?.driverId) query = query.eq('driver_id', filters.driverId);
-        if (filters?.status) query = query.eq('status', filters.status);
+        if (filters?.status) query = query.eq('status', filters.status as Enums<'trip_status'>);
         if (filters?.startDate) query = query.gte('start_time', filters.startDate);
         if (filters?.endDate) query = query.lte('start_time', filters.endDate);
         if (filters?.hasAnomaly !== undefined) query = query.eq('has_anomaly', filters.hasAnomaly);
@@ -337,8 +337,8 @@ export const maintenancesApi = {
             .order('created_at', { ascending: false });
 
         if (filters?.vehicleId) query = query.eq('vehicle_id', filters.vehicleId);
-        if (filters?.status) query = query.eq('status', filters.status);
-        if (filters?.type) query = query.eq('type', filters.type);
+        if (filters?.status) query = query.eq('status', filters.status as Enums<'maintenance_status'>);
+        if (filters?.type) query = query.eq('type', filters.type as Enums<'maintenance_type'>);
         if (filters?.page !== undefined && filters?.limit) {
             const from = filters.page * filters.limit;
             const to = from + filters.limit - 1;
@@ -429,7 +429,7 @@ export const checklistsApi = {
 
         if (filters?.vehicleId) query = query.eq('vehicle_id', filters.vehicleId);
         if (filters?.driverId) query = query.eq('driver_id', filters.driverId);
-        if (filters?.type) query = query.eq('type', filters.type);
+        if (filters?.type) query = query.eq('type', filters.type as Enums<'checklist_type'>);
         if (filters?.page !== undefined && filters?.limit) {
             const from = filters.page * filters.limit;
             const to = from + filters.limit - 1;
