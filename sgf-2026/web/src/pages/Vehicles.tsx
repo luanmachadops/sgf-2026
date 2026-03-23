@@ -79,7 +79,7 @@ export default function Vehicles() {
     // Use mock data for now, replace with API call when backend is ready
     const { data, isLoading } = useQuery({
         queryKey: ['vehicles', searchTerm, statusFilter, departmentFilter, currentPage],
-        queryFn: () => vehiclesApi.getAll({ search: searchTerm, status: statusFilter, department: departmentFilter, page: currentPage }),
+        queryFn: () => vehiclesApi.getAll({ search: searchTerm, status: statusFilter, departmentId: departmentFilter, page: currentPage }),
         enabled: false, // Disable for now, use mock data
     });
 

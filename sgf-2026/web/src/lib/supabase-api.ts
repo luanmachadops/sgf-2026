@@ -12,13 +12,17 @@ import type { Tables, TablesInsert, TablesUpdate } from '@/types/database.types'
 // ========================================
 
 class SupabaseApiError extends Error {
+    readonly code?: string;
+    readonly details?: string;
     constructor(
         message: string,
-        public readonly code?: string,
-        public readonly details?: string
+        code?: string,
+        details?: string
     ) {
         super(message);
         this.name = 'SupabaseApiError';
+        this.code = code;
+        this.details = details;
     }
 }
 

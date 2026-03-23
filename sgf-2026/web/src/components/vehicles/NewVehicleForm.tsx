@@ -76,8 +76,33 @@ export function NewVehicleForm({ onSuccess, onCancel }: NewVehicleFormProps) {
 
     const onSubmit = async (data: VehicleFormData) => {
         try {
+            // Map form fields to DB schema
+            const fuelTypeMap: Record<string, 'DIESEL' | 'GASOLINE' | 'ETHANOL' | 'FLEX'> = {
+                'Diesel': 'DIESEL',
+                'Gasolina': 'GASOLINE',
+                'Etanol': 'ETHANOL',
+                'Flex': 'FLEX',
+                'Elétrico': 'FLEX', // fallback
+            };
+
+            const vehiclePayload = {
+                plate: data.plate,
+                brand: data.brand,
+                model: data.model,
+                year: data.year,
+                type: data.type,
+                color: data.color,
+                renavam: data.renavam,
+                chassi: data.chassi,
+                current_odometer: data.odometer,
+                fuel_type: fuelTypeMap[data.fuelType] ?? 'GASOLINE',
+                status: data.status,
+                tank_capacity: 0,
+                qr_code_hash: null,
+            };
+
             // 1. Create vehicle first
-            const createdVehicle = await vehiclesApi.create(data);
+            const createdVehicle = await vehiclesApi.create(vehiclePayload as any);
             const vehicleId = createdVehicle.id;
 
             // 2. Upload photo if selected

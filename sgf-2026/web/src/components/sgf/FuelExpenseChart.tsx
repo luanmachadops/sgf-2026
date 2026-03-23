@@ -88,8 +88,8 @@ export default function FuelExpenseChart() {
                             <Pie
                                 key={`bg-${ring.name}`}
                                 data={[{ value: 1 }]}
-                                CX="50%"
-                                CY="50%"
+                                cx="50%"
+                                cy="50%"
                                 innerRadius={`${ring.innerRadius}%`}
                                 outerRadius={`${ring.outerRadius}%`}
                                 startAngle={90}
@@ -107,8 +107,8 @@ export default function FuelExpenseChart() {
                             <Pie
                                 key={ring.name}
                                 data={ring.data}
-                                CX="50%"
-                                CY="50%"
+                                cx="50%"
+                                cy="50%"
                                 innerRadius={`${ring.innerRadius}%`}
                                 outerRadius={`${ring.outerRadius}%`}
                                 startAngle={90}
