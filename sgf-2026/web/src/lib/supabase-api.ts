@@ -11,6 +11,10 @@ export type DriverRecord = Tables<'drivers'> & {
     departments?: { id: string; name: string } | null;
 };
 
+export type VehicleRecord = Tables<'vehicles'> & {
+    departments?: { id: string; name: string } | null;
+};
+
 // ========================================
 // ERROR HANDLING
 // ========================================
@@ -45,7 +49,7 @@ export const vehiclesApi = {
         search?: string;
         page?: number;
         limit?: number;
-    }): Promise<Tables<'vehicles'>[]> => {
+    }): Promise<VehicleRecord[]> => {
         let query = supabase
             .from('vehicles')
             .select('*, departments(id, name)')
@@ -70,17 +74,17 @@ export const vehiclesApi = {
 
         const { data, error } = await query;
         if (error) handleError(error);
-        return data as Tables<'vehicles'>[];
+        return (data ?? []) as VehicleRecord[];
     },
 
-    getById: async (id: string): Promise<Tables<'vehicles'>> => {
+    getById: async (id: string): Promise<VehicleRecord> => {
         const { data, error } = await supabase
             .from('vehicles')
             .select('*, departments(id, name)')
             .eq('id', id)
             .single();
         if (error) handleError(error);
-        return data as Tables<'vehicles'>;
+        return data as VehicleRecord;
     },
 
     create: async (vehicle: TablesInsert<'vehicles'>): Promise<Tables<'vehicles'>> => {
