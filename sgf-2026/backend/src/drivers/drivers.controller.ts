@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DriversService } from './drivers.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
+import { DriverAccessDto } from './dto/driver-access.dto';
 import { Driver } from './driver.entity';
 
 @ApiTags('drivers')
@@ -39,6 +40,18 @@ export class DriversController {
     @ApiResponse({ status: 404, description: 'Driver not found.' })
     update(@Param('id') id: string, @Body() updateDriverDto: UpdateDriverDto) {
         return this.driversService.update(id, updateDriverDto);
+    }
+
+    @Post(':id/provision-access')
+    @ApiOperation({ summary: 'Provision access for an existing driver without login' })
+    provisionAccess(@Param('id') id: string, @Body() accessDto: DriverAccessDto) {
+        return this.driversService.provisionAccess(id, accessDto);
+    }
+
+    @Post(':id/reset-password')
+    @ApiOperation({ summary: 'Reset password for an existing driver' })
+    resetPassword(@Param('id') id: string, @Body() accessDto: DriverAccessDto) {
+        return this.driversService.resetPassword(id, accessDto);
     }
 
     @Delete(':id')

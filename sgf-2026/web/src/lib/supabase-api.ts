@@ -7,6 +7,10 @@
 import { supabase } from './supabase';
 import type { Enums, Tables, TablesInsert, TablesUpdate } from '@/types/database.types';
 
+export type DriverRecord = Tables<'drivers'> & {
+    departments?: { id: string; name: string } | null;
+};
+
 // ========================================
 // ERROR HANDLING
 // ========================================
@@ -131,7 +135,7 @@ export const driversApi = {
         search?: string;
         page?: number;
         limit?: number;
-    }): Promise<Tables<'drivers'>[]> => {
+    }): Promise<DriverRecord[]> => {
         let query = supabase
             .from('drivers')
             .select('*, departments(id, name)')
@@ -156,17 +160,17 @@ export const driversApi = {
 
         const { data, error } = await query;
         if (error) handleError(error);
-        return data as Tables<'drivers'>[];
+        return (data ?? []) as DriverRecord[];
     },
 
-    getById: async (id: string): Promise<Tables<'drivers'>> => {
+    getById: async (id: string): Promise<DriverRecord> => {
         const { data, error } = await supabase
             .from('drivers')
             .select('*, departments(id, name)')
             .eq('id', id)
             .single();
         if (error) handleError(error);
-        return data as Tables<'drivers'>;
+        return data as DriverRecord;
     },
 
     create: async (driver: TablesInsert<'drivers'>): Promise<Tables<'drivers'>> => {

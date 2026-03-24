@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { driversApi } from '@/lib/supabase-api';
+import { driversApi, type DriverRecord } from '@/lib/supabase-api';
+import { driverAccessApi, type CreateDriverRequest } from '@/lib/backend-api';
 import type { DriverFilters } from '@/types';
-import type { TablesInsert, TablesUpdate } from '@/types/database.types';
+import type { TablesUpdate } from '@/types/database.types';
 
 export function useDrivers(filters?: DriverFilters) {
     return useQuery({
@@ -28,7 +29,7 @@ export function useCreateDriver() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (data: TablesInsert<'drivers'>) => driversApi.create(data),
+        mutationFn: (data: CreateDriverRequest) => driverAccessApi.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['drivers'] });
         },
@@ -58,3 +59,25 @@ export function useDeleteDriver() {
         },
     });
 }
+
+export function useProvisionDriverAccess() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id, password }: { id: string; password: string }) =>
+            driverAccessApi.provisionAccess(id, { password }),
+        onSuccess: (_, { id }) => {
+            queryClient.invalidateQueries({ queryKey: ['drivers'] });
+            queryClient.invalidateQueries({ queryKey: ['driver', id] });
+        },
+    });
+}
+
+export function useResetDriverPassword() {
+    return useMutation({
+        mutationFn: ({ id, password }: { id: string; password: string }) =>
+            driverAccessApi.resetPassword(id, { password }),
+    });
+}
+
+export type { DriverRecord };

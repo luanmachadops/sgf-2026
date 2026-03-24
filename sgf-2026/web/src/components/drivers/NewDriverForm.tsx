@@ -5,16 +5,20 @@ import { z } from 'zod';
 import { SGFInput } from '@/components/sgf/SGFInput';
 import { SGFSelect } from '@/components/sgf/SGFSelect';
 import { SGFButton } from '@/components/sgf/SGFButton';
-import { Loader2, Save, Camera, User } from 'lucide-react';
-import { departmentsApi, driversApi } from '@/lib/supabase-api';
+import { Loader2, Save, Camera, User, LockKeyhole } from 'lucide-react';
+import { departmentsApi } from '@/lib/supabase-api';
 import { toast } from 'sonner';
 import { isImageFile } from '@/lib/imageUtils';
-import type { TablesInsert } from '@/types/database.types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCreateDriver } from '@/hooks/useDrivers';
 
 const driverSchema = z.object({
     name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
-    cpf: z.string().min(11, 'CPF inválido').max(14, 'CPF inválido'),
+    cpf: z
+        .string()
+        .min(11, 'CPF inválido')
+        .max(14, 'CPF inválido')
+        .refine((value) => value.replace(/\D/g, '').length === 11, 'CPF inválido'),
     registrationNumber: z.string().min(1, 'Matrícula é obrigatória'),
     phone: z.string().min(10, 'Telefone inválido'),
     email: z.string().email('E-mail inválido'),
@@ -23,6 +27,11 @@ const driverSchema = z.object({
     licenseExpiry: z.string().min(1, 'Validade da CNH é obrigatória'),
     departmentId: z.string().uuid('Secretaria é obrigatória'),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
+    password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres').max(20, 'Senha deve ter no máximo 20 caracteres'),
+    confirmPassword: z.string().min(6, 'Confirme a senha'),
+}).refine((data) => data.password === data.confirmPassword, {
+    message: 'As senhas não coincidem',
+    path: ['confirmPassword'],
 });
 
 type DriverFormData = z.infer<typeof driverSchema>;
@@ -39,6 +48,7 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: string; label: string }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const createDriverMutation = useCreateDriver();
 
     const {
         register,
@@ -110,20 +120,19 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
 
     const onSubmit = async (data: DriverFormInput) => {
         try {
-            const driverPayload: TablesInsert<'drivers'> = {
+            await createDriverMutation.mutateAsync({
                 name: data.name.trim(),
                 cpf: data.cpf.replace(/\D/g, ''),
-                registration_number: data.registrationNumber.trim(),
-                cnh_number: data.licenseNumber.trim(),
-                cnh_category: data.licenseCategory,
-                cnh_expiry_date: data.licenseExpiry,
-                department_id: data.departmentId,
+                registrationNumber: data.registrationNumber.trim(),
+                cnhNumber: data.licenseNumber.trim(),
+                cnhCategory: data.licenseCategory,
+                cnhExpiryDate: data.licenseExpiry,
+                departmentId: data.departmentId,
                 phone: data.phone.trim(),
                 email: data.email.trim().toLowerCase(),
                 status: data.status ?? 'ACTIVE',
-            };
-
-            await driversApi.create(driverPayload);
+                password: data.password,
+            });
 
             if (selectedFile) {
                 toast.warning('O upload de foto para motoristas ainda não está disponível nesta versão.');
@@ -133,7 +142,7 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
             onSuccess();
         } catch (error: any) {
             console.error('Error creating driver:', error);
-            toast.error('Erro ao cadastrar motorista. Tente novamente.');
+            toast.error(error?.message || 'Erro ao cadastrar motorista. Tente novamente.');
         }
     };
 
@@ -313,6 +322,39 @@ export function NewDriverForm({ onSuccess, onCancel }: NewDriverFormProps) {
                                 />
                             )}
                         />
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                                <LockKeyhole size={18} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900">Dados de acesso</p>
+                                <p className="text-xs text-slate-500">
+                                    O motorista fará login no app usando CPF e esta senha.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <SGFInput
+                                label="Senha inicial"
+                                type="password"
+                                placeholder="Mínimo de 6 caracteres"
+                                {...register('password')}
+                                error={errors.password?.message}
+                                fullWidth
+                            />
+                            <SGFInput
+                                label="Confirmar senha"
+                                type="password"
+                                placeholder="Repita a senha"
+                                {...register('confirmPassword')}
+                                error={errors.confirmPassword?.message}
+                                fullWidth
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,5 +1,6 @@
 import { IsString, IsEnum, IsOptional, IsUUID, IsEmail, Length, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { DriverStatus } from '../driver.entity';
 
 export class CreateDriverDto {
     @ApiProperty({ example: '12345678901', description: 'CPF do motorista (apenas números)' })
@@ -41,6 +42,11 @@ export class CreateDriverDto {
     @IsEmail()
     @IsOptional()
     email?: string;
+
+    @ApiProperty({ enum: DriverStatus, example: DriverStatus.ACTIVE, required: false })
+    @IsEnum(DriverStatus)
+    @IsOptional()
+    status?: DriverStatus;
 
     @ApiProperty({ example: 'senha123', description: 'Senha de acesso' })
     @IsString()

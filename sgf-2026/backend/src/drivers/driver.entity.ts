@@ -52,8 +52,11 @@ export class Driver {
     @Column({ length: 255, nullable: true })
     email: string;
 
-    @Column({ type: 'text', name: 'password_hash' })
-    passwordHash: string;
+    @Column({ type: 'uuid', name: 'user_id', nullable: true })
+    userId: string | null;
+
+    @Column({ type: 'text', name: 'password_hash', nullable: true })
+    passwordHash: string | null;
 
     @Column({ type: 'decimal', precision: 3, scale: 2, default: 5.0 })
     score: number;
