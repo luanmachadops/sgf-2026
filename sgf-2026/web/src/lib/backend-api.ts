@@ -1,6 +1,24 @@
 import type { Tables } from '@/types/database.types';
 
-const API_URL = import.meta.env.VITE_API_URL;
+function resolveApiUrl(): string {
+    const configuredUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+
+    if (configuredUrl) {
+        const isLocalApi = /localhost:3000\/api$/.test(configuredUrl);
+        const isLocalHost = typeof window !== 'undefined'
+            && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+        if (!isLocalApi || isLocalHost) {
+            return configuredUrl;
+        }
+    }
+
+    if (typeof window !== 'undefined') {
+        return `${window.location.origin}/api`;
+    }
+
+    return configuredUrl || '/api';
+}
 
 class BackendApiError extends Error {
     readonly status: number;
@@ -13,11 +31,9 @@ class BackendApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {
-    if (!API_URL) {
-        throw new BackendApiError('VITE_API_URL is not configured', 500);
-    }
+    const apiUrl = resolveApiUrl();
 
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${apiUrl}${path}`, {
         ...init,
         headers: {
             'Content-Type': 'application/json',
