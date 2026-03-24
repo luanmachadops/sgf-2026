@@ -11,6 +11,44 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, fallbackMessage: string): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+            window.setTimeout(() => reject(new Error(fallbackMessage)), AUTH_TIMEOUT_MS);
+        }),
+    ]);
+}
+
+function loadCachedAuth() {
+    try {
+        const storedUser = localStorage.getItem('user');
+        const storedToken = localStorage.getItem('token');
+
+        return {
+            user: storedUser ? JSON.parse(storedUser) as User : null,
+            token: storedToken,
+        };
+    } catch (error) {
+        console.warn('Failed to restore cached auth state:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        return { user: null, token: null };
+    }
+}
+
+function persistAuthState(nextUser: User | null, nextToken: string | null) {
+    if (nextUser && nextToken) {
+        localStorage.setItem('token', nextToken);
+        localStorage.setItem('user', JSON.stringify(nextUser));
+        return;
+    }
+
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+}
 
 /**
  * Fetches the user profile from the `users` table.
@@ -47,26 +85,53 @@ async function fetchUserProfile(authUser: { id: string; email?: string; user_met
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
+    const cachedAuth = loadCachedAuth();
+    const [user, setUser] = useState<User | null>(cachedAuth.user);
+    const [token, setToken] = useState<string | null>(cachedAuth.token);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        let isMounted = true;
+
+        const applySession = async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
+            if (!isMounted) return;
+
+            if (!session) {
+                setUser(null);
+                setToken(null);
+                persistAuthState(null, null);
+                return;
+            }
+
+            setToken(session.access_token);
+
+            const userData = await withTimeout(
+                fetchUserProfile(session.user),
+                'Timed out while loading user profile'
+            );
+
+            if (!isMounted) return;
+
+            setUser(userData);
+            persistAuthState(userData, session.access_token);
+        };
+
         const initAuth = async () => {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                const {
+                    data: { session },
+                } = await withTimeout(
+                    supabase.auth.getSession(),
+                    'Timed out while restoring auth session'
+                );
 
-                if (session) {
-                    setToken(session.access_token);
-                    const userData = await fetchUserProfile(session.user);
-                    setUser(userData);
-                    localStorage.setItem('token', session.access_token);
-                    localStorage.setItem('user', JSON.stringify(userData));
-                }
+                await applySession(session);
             } catch (error) {
                 console.error('Error checking auth session:', error);
             } finally {
-                setIsLoading(false);
+                if (isMounted) {
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -75,22 +140,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
-                if (session) {
-                    setToken(session.access_token);
-                    const userData = await fetchUserProfile(session.user);
-                    setUser(userData);
-                    localStorage.setItem('token', session.access_token);
-                    localStorage.setItem('user', JSON.stringify(userData));
-                } else {
-                    setUser(null);
-                    setToken(null);
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
+                try {
+                    await applySession(session);
+                } catch (error) {
+                    console.error(`Auth state change failed during ${event}:`, error);
+                    if (isMounted && !cachedAuth.user) {
+                        setUser(null);
+                        setToken(null);
+                        persistAuthState(null, null);
+                    }
+                } finally {
+                    if (isMounted) {
+                        setIsLoading(false);
+                    }
                 }
             }
         );
 
         return () => {
+            isMounted = false;
             subscription?.unsubscribe();
         };
     }, []);
@@ -111,8 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setToken(data.session.access_token);
                 const userData = await fetchUserProfile(data.user);
                 setUser(userData);
-                localStorage.setItem('token', data.session.access_token);
-                localStorage.setItem('user', JSON.stringify(userData));
+                persistAuthState(userData, data.session.access_token);
             }
         } finally {
             setIsLoading(false);
@@ -127,8 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(null);
         setToken(null);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        persistAuthState(null, null);
         window.location.href = '/login';
     };
 
